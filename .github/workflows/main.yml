@@ -1,0 +1,56 @@
+name: Build TidyFlow Pro APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+
+      - name: Backup Custom UI and Pubspec
+        run: |
+          cp lib/main.dart lib/main.dart.bak
+          cp pubspec.yaml pubspec.yaml.bak
+
+      - name: Generate Flutter Structure
+        run: flutter create --overwrite --org com.project --project-name tidyflow .
+
+      - name: Restore Custom UI, Pubspec and Inject Engine
+        run: |
+          cp lib/main.dart.bak lib/main.dart
+          cp pubspec.yaml.bak pubspec.yaml
+          mkdir -p android/app/src/main/kotlin/com/project/tidyflow
+          cp android_custom/app/src/main/kotlin/com/project/tidyflow/MainActivity.kt android/app/src/main/kotlin/com/project/tidyflow/MainActivity.kt
+          cp android_custom/app/src/main/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+
+      - name: Modify Android Gradle versions
+        run: |
+          sed -i 's/version "1.8.22"/version "1.9.24"/g' android/settings.gradle || true
+          sed -i 's/version "1.7.1"/version "1.9.24"/g' android/settings.gradle || true
+          sed -i -E 's/id "org.jetbrains.kotlin.android" version ".*"/id "org.jetbrains.kotlin.android" version "1.9.24"/g' android/settings.gradle || true
+          sed -i -E 's/ext.kotlin_version = .*/ext.kotlin_version = "1.9.24"/g' android/build.gradle || true
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tidyflow-pro-release
+          path: build/app/outputs/flutter-apk/app-release.apk
